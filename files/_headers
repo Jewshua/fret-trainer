@@ -1,0 +1,7 @@
+/*
+  Cache-Control: public, max-age=3600
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+
+/fret-trainer.html
+  Cache-Control: no-cache

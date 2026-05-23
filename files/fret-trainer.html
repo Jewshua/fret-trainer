@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="Fret Trainer"/>
+<meta name="theme-color" content="#0d0a07"/>
+<title>Fret Trainer</title>
+<!-- Non-blocking font load -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inconsolata:wght@400;600&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inconsolata:wght@400;600&display=swap"></noscript>
+<style>
+:root {
+  --wood-dark:  #1a0d05;
+  --wood-mid:   #261308;
+  --wood-hi:    #38200e;
+  --fret-wire:  #c8a860;
+  --fret-dim:   #5a4820;
+  --nut:        #e8dcc0;
+  --accent:     #d4a853;
+  --blue-root:  #4fc3e8;
+  --green-hit:  #5cd45c;
+  --red-miss:   rgba(220,70,70,0.45);
+  --ui-bg:      #0d0a07;
+  --ui-border:  #251a08;
+  --txt:        #f0e8d8;
+  --txt-dim:    #6a5a3a;
+  --disabled-overlay: rgba(10,6,2,0.72);
+  --cell-border: rgba(255,255,255,0.06);
+  --cell-border-v: rgba(0,0,0,0.35);
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+
+html{
+  /* Lock height — prevent iOS bounce/resize on scroll */
+  position:fixed;
+  width:100%;height:100%;
+  overflow:hidden;
+}
+body{
+  width:100%;height:100%;
+  display:flex;flex-direction:column;
+  background:var(--ui-bg);
+  color:var(--txt);
+  font-family:'Inconsolata','Courier New',monospace; /* fallback if font not loaded */
+  overflow:hidden;
+  touch-action:manipulation;
+  /* Safe areas for notch + home indicator */
+  padding-top:env(safe-area-inset-top);
+  padding-bottom:env(safe-area-inset-bottom);
+  padding-left:env(safe-area-inset-left);
+  padding-right:env(safe-area-inset-right);
+}
+
+/* ══════════════════════════════
+   TOP BAR
+══════════════════════════════ */
+#topbar{
+  flex-shrink:0;
+  height:50px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 14px;
+  background:linear-gradient(180deg,#1c1208 0%,#0d0a07 100%);
+  border-bottom:1px solid var(--ui-border);
+  position:relative;z-index:50;
+}
+#title{
+  font-family:'Bebas Neue',sans-serif;
+  font-size:21px;letter-spacing:4px;
+  color:var(--accent);
+  text-shadow:0 0 18px rgba(212,168,83,.3);
+}
+#cog-wrap{position:relative;}
+#cog-btn{
+  width:38px;height:38px;
+  background:#151008;border:1px solid #2a1c08;
+  border-radius:9px;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:border-color .2s;
+}
+#cog-btn.open,#cog-btn:active{border-color:var(--accent);}
+#cog-btn svg{width:19px;height:19px;fill:#6a5830;transition:fill .2s,transform .4s;}
+#cog-btn.open svg{fill:var(--accent);transform:rotate(60deg);}
+
+/* dropdown */
+#dropdown{
+  position:absolute;top:44px;right:0;
+  background:#121008;
+  border:1px solid #2a1c08;
+  border-radius:11px;
+  min-width:220px;
+  box-shadow:0 14px 44px rgba(0,0,0,.85);
+  display:none;z-index:200;overflow:hidden;
+}
+#dropdown.open{display:block;}
+.dd-section{padding:5px 0;border-bottom:1px solid #1e1508;}
+.dd-section:last-child{border-bottom:none;}
+.dd-label{font-size:9px;letter-spacing:2.5px;color:#3a2808;padding:5px 14px 2px;text-transform:uppercase;}
+.dd-item{
+  padding:11px 14px;cursor:pointer;
+  font-size:13px;color:#7a6840;
+  display:flex;align-items:center;gap:10px;
+  transition:background .1s,color .1s;
+  min-height:44px; /* iOS touch target */
+}
+.dd-item:active{background:#1a1208;}
+.dd-item.active{color:var(--accent);background:#181208;}
+.dd-dot{width:7px;height:7px;border-radius:50%;background:#2a1c08;flex-shrink:0;transition:background .2s;}
+.dd-item.active .dd-dot{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+
+/* ══════════════════════════════
+   PROMPT ZONE — fixed height so fretboard never moves
+══════════════════════════════ */
+#prompt-zone{
+  flex-shrink:0;
+  height:86px; /* fixed — absorbs pills, buttons, timer without shifting board */
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:4px 14px;
+  background:var(--ui-bg);
+  border-bottom:1px solid var(--ui-border);
+  text-align:center;gap:3px;
+  overflow:hidden; /* never let it expand */
+}
+#prompt-line{font-size:15px;line-height:1.4;letter-spacing:.2px;}
+#prompt-line b{color:var(--accent);font-size:17px;}
+#prompt-line .sn{color:var(--blue-root);}
+#step-pills{display:flex;gap:5px;flex-wrap:wrap;justify-content:center;}
+.pill{
+  padding:2px 9px;border-radius:20px;font-size:11px;letter-spacing:1px;
+  border:1px solid #2a1c08;color:#3a2808;transition:all .2s;
+}
+.pill.done{border-color:#2a4a2a;color:#3a6a3a;opacity:.65;}
+.pill.current{border-color:var(--accent);color:var(--accent);background:rgba(212,168,83,.09);box-shadow:0 0 7px rgba(212,168,83,.18);}
+#timer-line{font-size:11px;color:var(--txt-dim);height:13px;line-height:13px;}
+
+/* ══════════════════════════════
+   FRETBOARD WRAPPER
+══════════════════════════════ */
+#fb-wrap{
+  flex:1;
+  display:flex;
+  flex-direction:row;
+  min-height:0;
+  position:relative;
+  overflow:hidden;
+}
+
+/* ── board itself ── */
+#board{
+  flex:1;
+  display:flex;flex-direction:column;
+  min-height:0;
+  position:relative;
+  background:
+    repeating-linear-gradient(
+      170deg,
+      transparent 0px, transparent 14px,
+      rgba(0,0,0,.05) 14px, rgba(0,0,0,.05) 15px,
+      transparent 15px, transparent 32px,
+      rgba(255,255,255,.012) 32px, rgba(255,255,255,.012) 33px
+    ),
+    linear-gradient(180deg, var(--wood-dark) 0%, var(--wood-mid) 35%, var(--wood-hi) 65%, var(--wood-mid) 85%, var(--wood-dark) 100%);
+}
+
+/* ── open string row ── */
+#open-row{
+  flex-shrink:0;
+  height:44px;
+  display:flex;
+  background:linear-gradient(180deg,#0e0a05 0%,#131008 100%);
+  border-bottom:1px solid #1a1008;
+  position:relative;z-index:8;
+}
+.open-cell{
+  flex:1;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;position:relative;
+  transition:background .1s;
+  /* vertical separator */
+  border-right:1px solid var(--cell-border-v);
+}
+.open-cell:last-child{border-right:none;}
+
+/* string label */
+.open-cell .str-lbl{
+  position:absolute;top:3px;
+  font-size:8px;letter-spacing:1px;
+  color:#3a2808;font-family:'Inconsolata',monospace;
+  pointer-events:none;
+  transition:color .2s;
+}
+.open-cell:not(.dis) .str-lbl{color:#6a5030;}
+
+.open-circle{
+  width:22px;height:22px;border-radius:50%;
+  border:2px solid #2a1c08;background:#0a0704;
+  transition:all .12s;position:relative;z-index:2;
+}
+.open-cell.dis{pointer-events:none;background:var(--disabled-overlay)!important;}
+.open-cell.dis .open-circle{opacity:.25;}
+.open-cell.root-c  .open-circle{border-color:var(--blue-root);background:var(--blue-root);box-shadow:0 0 14px var(--blue-root);}
+.open-cell.hit-c   .open-circle{border-color:var(--green-hit);background:var(--green-hit);box-shadow:0 0 14px var(--green-hit);}
+.open-cell.correct-c .open-circle{border-color:var(--accent);background:var(--accent);box-shadow:0 0 14px var(--accent);}
+
+/* ── nut ── */
+#nut{
+  flex-shrink:0;height:11px;
+  background:linear-gradient(180deg,#f5eed8 0%,#d8cca8 50%,#b8a870 100%);
+  box-shadow:0 2px 5px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.35);
+  position:relative;z-index:9;
+}
+#nut::after{content:"";position:absolute;bottom:0;left:0;right:0;height:2px;background:rgba(0,0,0,.4);}
+
+/* ── fret area ── */
+#fret-area{
+  flex:1;display:flex;flex-direction:column;
+  min-height:0;position:relative;
+}
+
+/* fret row */
+.frow{
+  flex:1;display:flex;
+  position:relative;
+  /* fret wire at bottom */
+  border-bottom:2px solid var(--fret-wire);
+}
+.frow:last-child{border-bottom:3px solid var(--fret-wire);}
+
+/* fret wire shadow above wire */
+.frow::after{
+  content:"";
+  position:absolute;bottom:2px;left:0;right:0;height:3px;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,.35));
+  pointer-events:none;z-index:2;
+}
+
+/* cell */
+.fcell{
+  flex:1;
+  position:relative;
+  cursor:pointer;
+  /* grid lines between strings */
+  border-right:1px solid var(--cell-border);
+  transition:background .08s;
+  /* ensure min touch target */
+  min-height:36px;
+}
+.fcell:last-child{border-right:none;}
+
+/* disabled column overlay */
+.fcell.dis{
+  pointer-events:none;
+  background:var(--disabled-overlay)!important;
+}
+.open-cell.dis ~ .open-cell.dis{} /* handled per-cell */
+
+/* hit states */
+.fcell.root-c::after,.fcell.hit-c::after,.fcell.correct-c::after{
+  content:"";
+  position:absolute;
+  width:20px;height:20px;border-radius:50%;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  z-index:6;pointer-events:none;
+}
+.fcell.root-c{background:rgba(79,195,232,.12)!important;}
+.fcell.root-c::after{background:var(--blue-root);box-shadow:0 0 16px var(--blue-root);}
+.fcell.hit-c{background:rgba(92,212,92,.14)!important;}
+.fcell.hit-c::after{background:var(--green-hit);box-shadow:0 0 16px var(--green-hit);}
+.fcell.correct-c{background:rgba(212,168,83,.14)!important;}
+.fcell.correct-c::after{background:var(--accent);box-shadow:0 0 14px var(--accent);}
+
+/* dot inlay sits inside a cell, centred */
+.dot-inlay{
+  position:absolute;
+  border-radius:50%;
+  background:radial-gradient(circle at 35% 32%, #e8dcc0, #9a7a48);
+  box-shadow:inset 0 1px 2px rgba(255,255,255,.25),inset 0 -1px 2px rgba(0,0,0,.4),0 1px 3px rgba(0,0,0,.5);
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  pointer-events:none;z-index:3;
+}
+
+/* string visual lines */
+.sv{
+  position:absolute;top:0;bottom:0;
+  transform:translateX(-50%);
+  border-radius:999px;
+  pointer-events:none;z-index:4;
+  transition:opacity .2s;
+}
+
+/* active:false state on string visual */
+.sv.dis{opacity:.12;}
+
+/* ── dot layer (above wood, below strings) ── */
+#dot-layer{
+  position:absolute;inset:0;
+  pointer-events:none;z-index:3;
+}
+
+/* ── number system choice buttons ── */
+#btn-row{
+  display:flex;gap:6px;flex-wrap:wrap;justify-content:center;
+  min-height:0;
+}
+.choice-btn{
+  padding:7px 13px;
+  border-radius:8px;
+  font-size:13px;font-family:'Inconsolata',monospace;letter-spacing:1px;
+  border:1px solid #2e1c08;
+  background:#131008;color:#7a6040;
+  cursor:pointer;
+  transition:all .12s;
+  min-width:40px;min-height:40px;
+  display:flex;align-items:center;justify-content:center;
+}
+.choice-btn:active,.choice-btn:hover{border-color:var(--accent);color:var(--accent);background:#1a1208;}
+.choice-btn.correct-btn{border-color:var(--green-hit);color:var(--green-hit);background:rgba(92,212,92,.1);}
+.choice-btn.wrong-btn{border-color:#e07070;color:#e07070;background:rgba(220,80,80,.1);}
+
+@media (hover:hover){
+  .fcell:not(.dis):hover{background:rgba(255,255,255,.05);}
+  .open-cell:not(.dis):hover{background:rgba(255,255,255,.04);}
+}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="title">FRET TRAINER</div>
+  <div id="cog-wrap">
+    <div id="cog-btn" onclick="toggleMenu(event)">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41L9.25 5.35c-.59.24-1.13.56-1.62.94L5.24 5.33c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.22-.07.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94L2.86 14.52c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+    </div>
+    <div id="dropdown">
+      <div class="dd-section">
+        <div class="dd-label">Note Finder</div>
+        <div class="dd-item active" data-mode="EA"  onclick="selectMode('EA',event)"><span class="dd-dot"></span>E &amp; A strings only</div>
+        <div class="dd-item"        data-mode="ALL" onclick="selectMode('ALL',event)"><span class="dd-dot"></span>All 6 strings</div>
+      </div>
+      <div class="dd-section">
+        <div class="dd-label">Chord Tones</div>
+        <div class="dd-item" data-mode="CT_MAJ" onclick="selectMode('CT_MAJ',event)"><span class="dd-dot"></span>Major — find 1, 3, 5</div>
+        <div class="dd-item" data-mode="CT_MIN" onclick="selectMode('CT_MIN',event)"><span class="dd-dot"></span>Minor — find 1, b3, 5</div>
+      </div>
+      <div class="dd-section">
+        <div class="dd-label">Number System</div>
+        <div class="dd-item" data-mode="NUM_SYS" onclick="selectMode('NUM_SYS',event)"><span class="dd-dot"></span>Name that interval</div>
+      </div>
+      <div class="dd-section">
+        <div class="dd-label">Interval Trainer</div>
+        <div class="dd-item" data-mode="INT_BASIC" onclick="selectMode('INT_BASIC',event)"><span class="dd-dot"></span>Simple — P1 m3 M3 P4 P5 P8</div>
+        <div class="dd-item" data-mode="INT_ADV"   onclick="selectMode('INT_ADV',event)"><span class="dd-dot"></span>Hard — chromatic &amp; tension</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="prompt-zone">
+  <div id="prompt-line">Loading…</div>
+  <div id="step-pills"></div>
+  <div id="btn-row"></div>
+  <div id="timer-line"></div>
+</div>
+
+<div id="fb-wrap">
+  <div id="board">
+    <div id="open-row"></div>
+    <div id="nut"></div>
+    <div id="fret-area"></div>
+    <div id="dot-layer"></div>
+  </div>
+</div>
+
+<script>
+/* ════════════════════════════════
+   CONSTANTS
+════════════════════════════════ */
+const STRINGS   = ['E_low','A','D','G','B','E_high'];
+const STR_LONG  = {E_low:'E (low)',A:'A',D:'D',G:'G',B:'B',E_high:'E (high)'};
+const STR_SHORT = {E_low:'E',A:'A',D:'D',G:'G',B:'B',E_high:'e'};
+const NOTES     = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+const OPEN_SEMI = {E_low:4,A:9,D:2,G:7,B:11,E_high:4};
+const OPEN_MIDI = {E_low:40,A:45,D:50,G:55,B:59,E_high:64};
+const GAUGE     = {E_low:4.2,A:3.6,D:3.0,G:2.4,B:1.8,E_high:1.3};
+const STR_CSS   = {
+  E_low: 'linear-gradient(90deg,#888,#ddd 40%,#777)',
+  A:     'linear-gradient(90deg,#999,#eee 40%,#888)',
+  D:     'linear-gradient(90deg,#aaa,#f5f5f5 40%,#999)',
+  G:     'linear-gradient(90deg,#bbb,#fff 40%,#aaa)',
+  B:     'linear-gradient(90deg,#ccc,#fff 40%,#bbb)',
+  E_high:'linear-gradient(90deg,#ddd,#fff 40%,#ccc)',
+};
+const NUM_FRETS  = 12;
+const SINGLE_DOT = [3,5,7,9];
+const DOUBLE_DOT = [12];
+
+// SIMPLE: diatonic + stable intervals (includes root P1 and octave P8)
+const IV_SIMPLE = [
+  {semis:0, name:'Root (P1)',   short:'P1', display:'P1'},
+  {semis:3, name:'Minor 3rd',   short:'m3', display:'m3'},
+  {semis:4, name:'Major 3rd',   short:'M3', display:'M3'},
+  {semis:5, name:'Perfect 4th', short:'P4', display:'P4'},
+  {semis:7, name:'Perfect 5th', short:'P5', display:'P5'},
+  {semis:12,name:'Octave',      short:'P8', display:'P8'},
+];
+// HARD: tension/chromatic intervals with some P4/P5 mixed in
+const IV_HARD = [
+  {semis:1, name:'Minor 2nd',  short:'b2', display:'b2'},
+  {semis:2, name:'Major 2nd',  short:'M2', display:'M2'},
+  {semis:5, name:'Perfect 4th',short:'P4', display:'P4'},
+  {semis:6, name:'Tritone',    short:'TT', display:'TT'},
+  {semis:7, name:'Perfect 5th',short:'P5', display:'P5'},
+  {semis:8, name:'Minor 6th',  short:'b6', display:'b6'},
+  {semis:9, name:'Major 6th',  short:'M6', display:'M6'},
+  {semis:10,name:'Minor 7th',  short:'b7', display:'b7'},
+  {semis:11,name:'Major 7th',  short:'M7', display:'M7'},
+];
+
+/* ════════════════════════════════
+   STATE
+════════════════════════════════ */
+let mode = 'EA';
+let menuOpen = false;
+let audioCtx = null;
+
+// note finder
+let nfActive = new Set(), nfFound = new Set(), nfStart = 0;
+
+// interval
+let ivRootStr='', ivRootFret=0, ivRootNote='';
+let ivTargetStr='', ivTargetFret=-1, ivCurrentIV=null;
+let ivIntervals=[], ivStep=0, ivPhase='root', ivStart=0;
+// ivPhase: 'root' | 'interval' | 'reveal'
+
+/* ════════════════════════════════
+   DOM
+════════════════════════════════ */
+const openRow   = document.getElementById('open-row');
+const fretArea  = document.getElementById('fret-area');
+const dotLayer  = document.getElementById('dot-layer');
+const boardEl   = document.getElementById('board');
+const promptLine= document.getElementById('prompt-line');
+const stepPills = document.getElementById('step-pills');
+const btnRow    = document.getElementById('btn-row');
+const timerLine = document.getElementById('timer-line');
+
+/* ════════════════════════════════
+   MENU
+════════════════════════════════ */
+function toggleMenu(e){
+  e.stopPropagation();
+  menuOpen=!menuOpen;
+  document.getElementById('cog-btn').classList.toggle('open',menuOpen);
+  document.getElementById('dropdown').classList.toggle('open',menuOpen);
+}
+document.addEventListener('click',()=>{
+  if(!menuOpen) return;
+  menuOpen=false;
+  document.getElementById('cog-btn').classList.remove('open');
+  document.getElementById('dropdown').classList.remove('open');
+});
+function selectMode(m,e){
+  e.stopPropagation();
+  mode=m;
+  document.querySelectorAll('.dd-item').forEach(el=>el.classList.toggle('active',el.dataset.mode===m));
+  menuOpen=false;
+  document.getElementById('cog-btn').classList.remove('open');
+  document.getElementById('dropdown').classList.remove('open');
+  buildBoard();
+}
+
+/* ════════════════════════════════
+   HELPERS
+════════════════════════════════ */
+const isIV    = ()=>mode==='INT_BASIC'||mode==='INT_ADV';
+const isCT    = ()=>mode==='CT_MAJ'||mode==='CT_MIN';
+const isNUM   = ()=>mode==='NUM_SYS';
+const active  = s=> (isIV()||isCT()||isNUM())||mode==='ALL'||(s==='E_low'||s==='A');
+const noteAt  = (s,f)=>NOTES[(OPEN_SEMI[s]+f)%12];
+const fretFor = (s,ni)=>{ for(let f=0;f<=12;f++) if((OPEN_SEMI[s]+f)%12===ni) return f; return -1; };
+function shuffle(a){ for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+
+/* ════════════════════════════════
+   AUDIO
+════════════════════════════════ */
+function initAudio(){ if(!audioCtx) audioCtx=new(window.AudioContext||window.webkitAudioContext)(); }
+function midiFreq(m){ return 440*Math.pow(2,(m-69)/12); }
+function playNote(str,fret){
+  initAudio();
+  const now=audioCtx.currentTime;
+  const freq=midiFreq(OPEN_MIDI[str]+fret);
+  const p={E_low:{b:1800,d:1.6,v:.95},A:{b:2200,d:1.45,v:.85},D:{b:2800,d:1.25,v:.75},G:{b:3400,d:1.1,v:.65},B:{b:4300,d:.95,v:.58},E_high:{b:5200,d:.82,v:.5}}[str];
+  const flt=audioCtx.createBiquadFilter(); flt.type='lowpass'; flt.frequency.value=p.b; flt.Q.value=.6; flt.connect(audioCtx.destination);
+  [{m:1,a:1},{m:2,a:.55},{m:3,a:.28},{m:4,a:.12},{m:5,a:.06}].forEach(h=>{
+    const o=audioCtx.createOscillator(),g=audioCtx.createGain();
+    o.type='triangle';o.frequency.value=freq*h.m;o.detune.value=(Math.random()-.5)*5;
+    g.gain.setValueAtTime(h.a*.18*p.v,now);g.gain.exponentialRampToValueAtTime(.0001,now+p.d);
+    o.connect(g);g.connect(flt);o.start(now);o.stop(now+p.d+.05);
+  });
+  const ab=audioCtx.createBufferSource();
+  const buf=audioCtx.createBuffer(1,audioCtx.sampleRate*.03,audioCtx.sampleRate);
+  const d=buf.getChannelData(0); for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*.24;
+  ab.buffer=buf;
+  const af=audioCtx.createBiquadFilter();af.type='highpass';af.frequency.value=2200;
+  const ag=audioCtx.createGain();ag.gain.setValueAtTime(.13,now);ag.gain.exponentialRampToValueAtTime(.0001,now+.03);
+  ab.connect(af);af.connect(ag);ag.connect(flt);ab.start(now);ab.stop(now+.03);
+}
+
+/* ════════════════════════════════
+   TAP UTILITY
+   Fires on touchstart (instant, no 300ms delay) and falls
+   back to click on desktop. Prevents ghost click double-fire.
+════════════════════════════════ */
+function addTap(el, fn){
+  let touched = false;
+  el.addEventListener('touchstart', e=>{
+    e.preventDefault(); // prevents ghost click
+    touched = true;
+    fn();
+  }, {passive:false});
+  el.addEventListener('click', e=>{
+    if(touched){ touched=false; return; } // already fired via touch
+    fn();
+  });
+}
+
+/* ════════════════════════════════
+   BUILD BOARD
+════════════════════════════════ */
+function buildBoard(){
+  openRow.innerHTML='';
+  fretArea.innerHTML='';
+  dotLayer.innerHTML='';
+
+  /* ── open row ── */
+  STRINGS.forEach(str=>{
+    const cell=document.createElement('div');
+    cell.className='open-cell'+(active(str)?'':' dis');
+    cell.dataset.str=str; cell.dataset.fret='0';
+    addTap(cell, ()=>handleClick(str,0));
+    const circ=document.createElement('div'); circ.className='open-circle';
+    cell.appendChild(circ);
+    openRow.appendChild(cell);
+  });
+
+  /* ── fret rows ── */
+  for(let f=1;f<=NUM_FRETS;f++){
+    const row=document.createElement('div');
+    row.className='frow';
+    // fret wire brightness: slightly warmer/brighter near nut
+    const bright=Math.round(58+22*(1-f/NUM_FRETS));
+    row.style.borderBottomColor=`hsl(40,55%,${bright}%)`;
+    if(f===NUM_FRETS) row.style.borderBottomWidth='3px';
+
+    STRINGS.forEach(str=>{
+      const cell=document.createElement('div');
+      cell.className='fcell'+(active(str)?'':' dis');
+      cell.dataset.str=str; cell.dataset.fret=f;
+      addTap(cell, ()=>handleClick(str,f));
+      row.appendChild(cell);
+    });
+    fretArea.appendChild(row);
+  }
+
+  /* ── string visual lines + dot inlays (positioned after layout settles) ── */
+  // Double rAF: first frame commits layout, second frame measures it reliably
+  requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    // Remove any existing string visuals from a previous build
+    boardEl.querySelectorAll('.sv').forEach(el=>el.remove());
+    dotLayer.innerHTML='';
+
+    const boardRect = boardEl.getBoundingClientRect();
+    const openRect  = openRow.getBoundingClientRect();
+    const faRect    = fretArea.getBoundingClientRect();
+
+    // String visuals — measure each open cell's centre X
+    const cells = openRow.querySelectorAll('.open-cell');
+    cells.forEach((cell, si)=>{
+      const str    = STRINGS[si];
+      const cRect  = cell.getBoundingClientRect();
+      const cx     = cRect.left + cRect.width/2 - boardRect.left;
+      const sv     = document.createElement('div');
+      sv.className = 'sv' + (active(str) ? '' : ' dis');
+      sv.dataset.str = str;
+      sv.style.cssText = [
+        `left:${cx}px`,
+        `width:${GAUGE[str]}px`,
+        `top:${openRect.height + 11}px`,
+        `background:${STR_CSS[str]}`,
+        `box-shadow:0 0 3px rgba(255,255,255,.07)`,
+      ].join(';');
+      boardEl.appendChild(sv);
+    });
+
+    // Dot inlays — centred within each fret row
+    const firstFrow = fretArea.querySelector('.frow');
+    if(!firstFrow) return;
+    const frowH  = firstFrow.getBoundingClientRect().height;
+    const faTop  = faRect.top - boardRect.top;
+    const boardW = boardRect.width;
+    const dotSize = Math.min(frowH * 0.42, boardW / STRINGS.length * 0.48, 13);
+
+    SINGLE_DOT.forEach(f=>{
+      makeDot(boardW / 2, faTop + (f - 0.5) * frowH, dotSize);
+    });
+    DOUBLE_DOT.forEach(f=>{
+      const cy = faTop + (f - 0.5) * frowH;
+      makeDot(boardW * 0.28, cy, dotSize);
+      makeDot(boardW * 0.72, cy, dotSize);
+    });
+  }));
+
+  if(isIV())       startIVRound();
+  else if(isCT())  startCTRound();
+  else if(isNUM()) startNUMRound();
+  else             startNFRound();
+}
+
+function makeDot(cx,cy,size){
+  const d=document.createElement('div');
+  d.className='dot-inlay';
+  d.style.cssText=`width:${size}px;height:${size}px;left:${cx}px;top:${cy}px;`;
+  dotLayer.appendChild(d);
+}
+
+/* ════════════════════════════════
+   HIGHLIGHT HELPERS
+════════════════════════════════ */
+function clearHL(){
+  document.querySelectorAll('.root-c,.hit-c,.correct-c').forEach(el=>{
+    el.classList.remove('root-c','hit-c','correct-c');
+  });
+  btnRow.innerHTML='';
+}
+
+function getCell(str,fret){
+  if(fret===0) return openRow.querySelector(`[data-str="${str}"]`);
+  const rows=fretArea.querySelectorAll('.frow');
+  if(!rows[fret-1]) return null;
+  const cells=rows[fret-1].querySelectorAll('.fcell');
+  return cells[STRINGS.indexOf(str)]||null;
+}
+
+function markCell(str,fret,cls){
+  const el=getCell(str,fret); if(el) el.classList.add(cls);
+}
+
+function flashCell(str,fret){
+  const el=getCell(str,fret); if(!el) return;
+  el.style.background='rgba(220,60,60,.4)';
+  setTimeout(()=>el.style.background='',280);
+}
+
+/* ════════════════════════════════
+   NOTE FINDER
+════════════════════════════════ */
+function startNFRound(){
+  nfActive.clear(); nfFound.clear(); clearHL();
+  stepPills.innerHTML=''; timerLine.textContent='';
+  const target=NOTES[Math.floor(Math.random()*12)];
+  STRINGS.forEach(str=>{
+    if(!active(str)) return;
+    for(let f=0;f<=11;f++) if(noteAt(str,f)===target) nfActive.add(`${str}|${f}`);
+  });
+  promptLine.innerHTML=`Find all <b>${target}</b> &nbsp;<span style="color:var(--txt-dim);font-size:12px">(${nfActive.size} location${nfActive.size>1?'s':''})</span>`;
+  nfStart=performance.now();
+}
+
+function handleNFClick(str,fret){
+  const key=`${str}|${fret}`;
+  if(!nfActive.has(key)||nfFound.has(key)){
+    if(active(str)) flashCell(str,fret);
+    return;
+  }
+  playNote(str,fret);
+  nfFound.add(key);
+  markCell(str,fret,'correct-c');
+  if(nfFound.size===nfActive.size){
+    const t=((performance.now()-nfStart)/1000).toFixed(2);
+    promptLine.innerHTML=`<b style="color:var(--green-hit)">✔ All found!</b>`;
+    timerLine.textContent=`${t}s`;
+    setTimeout(startNFRound,850);
+  }
+}
+
+/* ════════════════════════════════════════════════════════
+   ADAPTIVE ML SYSTEM
+   Tracks per-interval performance. Struggling intervals
+   get pulled more often, but noise keeps it feeling random.
+════════════════════════════════════════════════════════ */
+
+// stats[ivKey] = { attempts, misses }
+// ivKey = interval.display e.g. "m3", "TT"
+const ivStats = {};
+
+function ivKey(iv){ return iv.display; }
+
+function recordAttempt(iv, missed){
+  const k = ivKey(iv);
+  if(!ivStats[k]) ivStats[k] = {attempts:0, misses:0};
+  ivStats[k].attempts++;
+  if(missed) ivStats[k].misses++;
+}
+
+// Returns 0–1: higher = more struggle. Cold intervals start at 0.5 (neutral pull).
+function struggleScore(iv){
+  const k = ivKey(iv);
+  const s = ivStats[k];
+  if(!s || s.attempts < 2) return 0.5; // not enough data — neutral
+  const missRate = s.misses / s.attempts;
+  return missRate; // 0 = perfect, 1 = never got it right
+}
+
+// Weighted random pick from pool using adaptive scores + noise
+function pickInterval(pool){
+  // Weight = struggle^1.4 * 0.8 + 0.2 (noise floor keeps randomness)
+  // This means even a perfect interval has 20% base weight
+  const weights = pool.map(iv => {
+    const s = struggleScore(iv);
+    return Math.pow(s, 1.4) * 0.8 + 0.2;
+  });
+  const total = weights.reduce((a,b)=>a+b, 0);
+  let r = Math.random() * total;
+  for(let i=0; i<pool.length; i++){
+    r -= weights[i];
+    if(r <= 0) return pool[i];
+  }
+  return pool[pool.length-1];
+}
+
+/* ════════════════════════════════════════════════════════
+   STRING INDEX
+════════════════════════════════════════════════════════ */
+const STR_IDX = {E_low:0, A:1, D:2, G:3, B:4, E_high:5};
+
+/* ════════════════════════════════════════════════════════
+   SIMPLE MODE: REAL GUITAR SHAPES
+   These are the actual moveable interval shapes a guitarist
+   uses. Root on string X → interval always on adjacent/
+   near string, same fret position as real chord/scale shapes.
+
+   Shape format: [strOffset, fretOffset]
+   strOffset: +1 = one string higher (thinner), +2 = two up etc.
+   fretOffset: fret delta from root fret
+
+   The G→B string pair has a +1 semitone quirk (guitar tuning)
+   so shapes crossing that boundary shift by -1 fret.
+
+   We store multiple shape options per interval so the same
+   interval can appear from different root strings naturally.
+════════════════════════════════════════════════════════ */
+
+// Returns true if the interval from rootStrIdx crosses the G/B boundary
+// (i.e. root on E_low/A/D/G and target on B or E_high)
+function crossesGB(rootStrIdx, targetStrIdx){
+  // G=3, B=4. Crossing = root ≤ 3 AND target ≥ 4
+  return rootStrIdx <= 3 && targetStrIdx >= 4;
+}
+
+// Build a target position from a shape {strOff, fretOff} relative to root
+// Returns {str, fret} or null if out of range
+function shapeToPos(rootStr, rootFret, strOff, fretOff){
+  const ri = STR_IDX[rootStr];
+  const ti = ri + strOff;
+  if(ti < 0 || ti > 5) return null;
+  const tStr = STRINGS[ti];
+  // Apply G/B tuning correction: crossing G→B is only 4 semitones not 5,
+  // so real fret shapes already account for this — but we need to verify
+  // the note is correct
+  let tf = rootFret + fretOff;
+  if(tf < 0 || tf > 12) return null;
+  return {str: tStr, fret: tf};
+}
+
+// Verify a position actually plays the right note (midi check)
+function posIsCorrect(rootStr, rootFret, targetStr, targetFret, semis){
+  const rootMidi   = OPEN_MIDI[rootStr]   + rootFret;
+  const targetMidi = OPEN_MIDI[targetStr] + targetFret;
+  return (targetMidi - rootMidi) === semis ||
+         (targetMidi - rootMidi) === semis + 12; // octave-up also fine for P8
+}
+
+/*
+  Real guitar interval shapes (standard tuning):
+  All pairs of strings are tuned a P4 apart (5 semitones) EXCEPT G→B (4 semitones).
+
+  Reference shapes (root → interval, strOff, fretOff):
+  ─────────────────────────────────────────────────────
+  P1  : same string, fret 0 (trivial — used in Simple as root confirmation)
+  m3  : +1 str, +2 frets  (all pairs except G→B: +1 str, +3 frets)
+  M3  : +1 str, +3 frets  (G→B: +1 str, +4 frets)  ← wait let me recalc...
+  P4  : +1 str, 0 frets   (G→B: +1 str, +1 fret)
+  P5  : +1 str, +2 frets  (G→B: +1 str, +3 frets)  OR same str +7
+        also: +2 str, -3 frets (classic power chord shape on lower strings)
+  P8  : +2 str, +2 frets  (across G→B: +2 str, +3 frets)
+        or same string +12 (if fits)
+
+  Verified against standard tuning (EADGBE, semitones from open):
+  E_low=0, A=5, D=10, G=15, B=19, E_high=24  (relative)
+  Actual note offsets between strings: 5,5,5,4,5
+*/
+
+// Shapes table: iv.semis → array of {strOff, fretOff, condition}
+// condition: 'normal'=non-GB crossing, 'gb'=crosses G/B, 'any'=always
+// We try each shape in order, pick first valid one, with jitter between equally valid
+
+const SIMPLE_SHAPES = {
+  // P1: root itself (handled separately — we highlight root, target = root for confirm)
+  0:  [{strOff:0, fretOff:0, cond:'any'}],
+
+  // m3 (3 semis): +1 string, +3 normal / +4 over GB ... wait let me be precise
+  // E_low→A: A open=5, so m3 above E_low(fret f) = note (4+f+3)%12
+  //   On A string: (9+x)%12 = (4+f+3)%12 → x = f+3-5 = f-2. Hmm.
+  // Let me just hardcode verified offsets:
+  //
+  // Adjacent string interval shapes (verified):
+  // Between any two strings tuned P4 apart (5 semis): E-A, A-D, D-G
+  //   m3(3): next str, fret - 2        [5-3=2, so 2 less fret]
+  //   M3(4): next str, fret - 1
+  //   P4(5): next str, fret + 0  (same fret)
+  //   P5(7): next str, fret + 2
+  //   P8(12): skip 1 string (+2), fret + 2
+  //
+  // G→B pair (4 semis apart):
+  //   m3(3): next str, fret - 1   [4-3=1]
+  //   M3(4): next str, fret + 0
+  //   P4(5): next str, fret + 1
+  //   P5(7): next str, fret + 3
+  //   P8: across GB e.g. G→E_high (+2str): fret+3
+  //       or B→E_high(normal +2str): fret+2 with GB correction once
+
+  3:  [ // m3
+    {strOff:+1, fretOff:-2, cond:'normal'},  // E-A, A-D, D-G (non-GB)
+    {strOff:+1, fretOff:-1, cond:'gb'},      // G-B crossing
+  ],
+  4:  [ // M3
+    {strOff:+1, fretOff:-1, cond:'normal'},
+    {strOff:+1, fretOff: 0, cond:'gb'},
+  ],
+  5:  [ // P4
+    {strOff:+1, fretOff: 0, cond:'normal'},
+    {strOff:+1, fretOff:+1, cond:'gb'},
+  ],
+  7:  [ // P5
+    {strOff:+1, fretOff:+2, cond:'normal'},
+    {strOff:+1, fretOff:+3, cond:'gb'},
+  ],
+  12: [ // P8 — two strings up
+    {strOff:+2, fretOff:+2, cond:'normal'}, // E→D, A→G, D→B skips GB once
+    {strOff:+2, fretOff:+3, cond:'gb'},     // if path crosses GB
+    {strOff: 0, fretOff:12, cond:'any'},    // same string if fret ≤ 12
+  ],
+};
+
+// Check whether a shape's condition matches the root→target string pair
+function shapeCondOk(cond, rootStr, strOff){
+  const ri = STR_IDX[rootStr];
+  const ti = ri + strOff;
+  if(cond === 'any') return true;
+  const crosses = crossesGB(ri, ti);
+  return cond === 'gb' ? crosses : !crosses;
+}
+
+// Pick a Simple-mode target using real guitar shapes
+function pickSimpleTarget(rootStr, rootFret, iv){
+  if(iv.semis === 0) return {str: rootStr, fret: rootFret}; // P1 = root
+
+  const shapes = SIMPLE_SHAPES[iv.semis];
+  if(!shapes) return pickHardTarget(rootStr, rootFret, iv); // fallback
+
+  // Collect all valid shape positions
+  const valid = [];
+  for(const sh of shapes){
+    if(!shapeCondOk(sh.cond, rootStr, sh.strOff)) continue;
+    const pos = shapeToPos(rootStr, rootFret, sh.strOff, sh.fretOff);
+    if(!pos) continue;
+    // Verify it plays the right note
+    if(!posIsCorrect(rootStr, rootFret, pos.str, pos.fret, iv.semis)) continue;
+    valid.push(pos);
+  }
+
+  if(valid.length > 0){
+    // Pick randomly among valid shapes (usually just 1)
+    return valid[Math.floor(Math.random() * valid.length)];
+  }
+
+  // Fallback: try going to E_high string if root is high and shape runs out of board
+  // Last resort: theoretical pick
+  return pickHardTarget(rootStr, rootFret, iv);
+}
+
+/* ════════════════════════════════════════════════════════
+   HARD MODE: FULLY THEORETICAL — any string, any position
+   Same weighted picker as before but opens all strings.
+════════════════════════════════════════════════════════ */
+function pickHardTarget(rootStr, rootFret, iv){
+  const rootMidi     = OPEN_MIDI[rootStr] + rootFret;
+  const targetMidi   = rootMidi + iv.semis;
+  const targetNoteIdx= targetMidi % 12;
+  const rootIdx      = STR_IDX[rootStr];
+
+  const positions = [];
+
+  STRINGS.forEach((str, si) => {
+    for(let f=0; f<=12; f++){
+      if((OPEN_SEMI[str]+f)%12 !== targetNoteIdx) continue;
+      const posMidi = OPEN_MIDI[str] + f;
+      if(posMidi <= rootMidi) continue;
+      if(posMidi > rootMidi + 24) continue;
+
+      const strDiff = si - rootIdx;
+      let w = 0;
+      if(strDiff === 0)           w = (iv.semis===12) ? 0.5 : 0.1;
+      else if(strDiff === 1)      w = 0.85;
+      else if(strDiff === 2)      w = 0.70;
+      else if(strDiff === 3)      w = 0.40;
+      else if(strDiff >= 4)       w = 0.18;
+      else                        w = 0.06; // lower string
+
+      if(f > 9) w *= 0.7;
+      if(f === 0) w *= 0.5;
+      w *= (0.85 + Math.random() * 0.3);
+      if(w > 0) positions.push({str, fret:f, weight:w});
+    }
+  });
+
+  if(positions.length === 0){
+    for(let f=0;f<=12;f++){
+      if((OPEN_SEMI[rootStr]+f)%12===targetNoteIdx && OPEN_MIDI[rootStr]+f>rootMidi)
+        return {str:rootStr, fret:f};
+    }
+    return {str:rootStr, fret:Math.min(rootFret+iv.semis,12)};
+  }
+
+  const total = positions.reduce((a,p)=>a+p.weight,0);
+  let r = Math.random()*total;
+  for(const p of positions){ r-=p.weight; if(r<=0) return p; }
+  return positions[positions.length-1];
+}
+
+/* ════════════════════════════════
+   INTERVAL TRAINER  (3-phase: root → interval → reveal)
+════════════════════════════════ */
+const STR_ORD = {E_low:'6th',A:'5th',D:'4th',G:'3rd',B:'2nd',E_high:'1st'};
+
+let ivWrongThisTurn = false;
+
+function startIVRound(){
+  ivStep=0; ivPhase='root'; clearHL();
+  stepPills.innerHTML=''; timerLine.textContent='';
+  ivWrongThisTurn = false;
+
+  // Simple mode: root on E_low, A, D, or G only — keeps target on board
+  // (P5 from B string would land off fretboard)
+  // Hard mode: any string
+  const rootPool = (mode==='INT_BASIC')
+    ? ['E_low','A','D','G']
+    : STRINGS;
+  ivRootStr  = rootPool[Math.floor(Math.random()*rootPool.length)];
+  ivRootFret = Math.floor(Math.random()*8); // frets 0–7
+  ivRootNote = noteAt(ivRootStr, ivRootFret);
+
+  const pool = mode==='INT_BASIC' ? IV_SIMPLE : IV_HARD;
+  ivIntervals = [ pickInterval(pool) ];
+  ivCurrentIV = null;
+
+  showIVRootPrompt();
+}
+
+function showIVRootPrompt(){
+  ivPhase = 'root';
+  clearHL();
+  timerLine.textContent = '';
+  stepPills.innerHTML = '';
+
+  promptLine.innerHTML =
+    `Root: <b>${ivRootNote}</b><br>` +
+    `<span style="font-size:12px;color:var(--txt-dim)">Find it on the </span>` +
+    `<span class="sn">${STR_LONG[ivRootStr]}</span>` +
+    `<span style="font-size:12px;color:var(--txt-dim)"> (${STR_ORD[ivRootStr]} string)</span>`;
+}
+
+function showIVIntervalPrompt(){
+  ivPhase = 'interval';
+  ivWrongThisTurn = false;
+  ivCurrentIV = ivIntervals[ivStep];
+  const iv = ivCurrentIV;
+
+  // Pick target using mode-appropriate logic
+  const pos = (mode==='INT_BASIC')
+    ? pickSimpleTarget(ivRootStr, ivRootFret, iv)
+    : pickHardTarget(ivRootStr, ivRootFret, iv);
+
+  ivTargetStr  = pos.str;
+  ivTargetFret = pos.fret;
+
+  document.querySelectorAll('.hit-c').forEach(el=>el.classList.remove('hit-c'));
+
+  const sameStr = ivTargetStr === ivRootStr;
+  const strHint = sameStr
+    ? `same string`
+    : `<span class="sn">${STR_LONG[ivTargetStr]}</span> string`;
+
+  promptLine.innerHTML =
+    `Root: <b>${ivRootNote}</b> &nbsp;·&nbsp; Find: <b>${iv.name}</b>` +
+    ` <span style="font-size:11px;color:var(--txt-dim)">(${iv.display})</span><br>` +
+    `<span style="font-size:12px;color:var(--txt-dim)">on the ${strHint}</span>`;
+
+  if(ivStep===0) ivStart = performance.now();
+}
+
+function showIVReveal(){
+  ivPhase = 'reveal';
+  const iv = ivCurrentIV;
+  const revealNote = noteAt(ivTargetStr, ivTargetFret);
+  const t = ((performance.now()-ivStart)/1000).toFixed(2);
+
+  recordAttempt(iv, ivWrongThisTurn);
+
+  const s = ivStats[ivKey(iv)];
+  let statsHint = '';
+  if(s && s.attempts >= 3){
+    const pct = Math.round((1 - s.misses/s.attempts)*100);
+    const col = pct>=80?'var(--green-hit)':pct>=50?'var(--accent)':'#e07070';
+    statsHint = ` <span style="font-size:10px;color:${col}">${pct}%</span>`;
+  }
+
+  promptLine.innerHTML =
+    `<span style="color:var(--green-hit);font-size:17px">✔</span> ` +
+    `<b>${iv.display} = ${revealNote}</b>${statsHint}<br>` +
+    `<span style="font-size:12px;color:var(--txt-dim)">${iv.name} above ${ivRootNote}</span>`;
+
+  timerLine.textContent = `${t}s · fret ${ivTargetFret} on ${STR_LONG[ivTargetStr]}`;
+
+  setTimeout(()=>{
+    ivStep++;
+    if(ivStep >= ivIntervals.length) startIVRound();
+    else showIVIntervalPrompt();
+  }, 1600);
+}
+
+function handleIVClick(str, fret){
+  if(ivPhase === 'reveal') return;
+
+  if(ivPhase === 'root'){
+    if(str !== ivRootStr || fret !== ivRootFret){ flashCell(str,fret); return; }
+    playNote(str,fret);
+    markCell(str,fret,'root-c');
+    setTimeout(()=>showIVIntervalPrompt(), 350);
+    return;
+  }
+
+  if(str !== ivTargetStr || fret !== ivTargetFret){
+    flashCell(str,fret);
+    ivWrongThisTurn = true;
+    return;
+  }
+
+  playNote(str,fret);
+  markCell(str,fret,'hit-c');
+  showIVReveal();
+}
+
+/* ════════════════════════════════════════════════════════
+   CHORD TONE TRAINER  (lessons 12-13 + 26 bridge)
+
+   Root always on E or A string (what you know).
+   Asks: find the root (1) → then 3rd → then 5th.
+   Uses the same real guitar shapes as Simple interval mode.
+   Reveals note name at each step so you burn in:
+   "A power chord = A (1) + C# (3) + E (5)"
+
+   Major mode: 1, M3 (semis=4), P5 (semis=7)
+   Minor mode: 1, m3 (semis=3), P5 (semis=7)
+════════════════════════════════════════════════════════ */
+
+const CT_STEPS_MAJ = [
+  {semis:0,  label:'Root', num:'1' },
+  {semis:4,  label:'Major 3rd', num:'3' },
+  {semis:7,  label:'Perfect 5th', num:'5' },
+];
+const CT_STEPS_MIN = [
+  {semis:0,  label:'Root', num:'1' },
+  {semis:3,  label:'Minor 3rd', num:'b3'},
+  {semis:7,  label:'Perfect 5th', num:'5' },
+];
+
+// Adaptive stats per chord type key = 'maj' | 'min'
+const ctStats = {};
+function ctRecord(type, missed){
+  if(!ctStats[type]) ctStats[type]={attempts:0,misses:0};
+  ctStats[type].attempts++;
+  if(missed) ctStats[type].misses++;
+}
+
+let ctRootStr='', ctRootFret=0, ctRootNote='';
+let ctSteps=[], ctStep=0, ctPhase='tap'; // phase: 'tap' | 'reveal'
+let ctTargets=[];   // [{str,fret,note,label,num}] pre-computed for all steps
+let ctWrong=false, ctStart=0;
+
+function startCTRound(){
+  ctStep=0; ctPhase='tap'; ctWrong=false;
+  clearHL(); stepPills.innerHTML=''; btnRow.innerHTML=''; timerLine.textContent='';
+
+  // Root always on E or A — the strings you know
+  ctRootStr  = Math.random()<0.5 ? 'E_low' : 'A';
+  ctRootFret = Math.floor(Math.random()*9); // 0–8
+  ctRootNote = noteAt(ctRootStr, ctRootFret);
+
+  const steps = mode==='CT_MAJ' ? CT_STEPS_MAJ : CT_STEPS_MIN;
+  ctSteps = steps;
+
+  // Pre-compute all 3 target positions using real guitar shapes
+  ctTargets = steps.map((st, i) => {
+    if(st.semis === 0) return {str:ctRootStr, fret:ctRootFret, note:ctRootNote, label:st.label, num:st.num};
+    const pos = pickSimpleTarget(ctRootStr, ctRootFret, {semis:st.semis, display:st.num, name:st.label});
+    return {str:pos.str, fret:pos.fret, note:noteAt(pos.str,pos.fret), label:st.label, num:st.num};
+  });
+
+  ctStart = performance.now();
+  showCTPrompt();
+}
+
+function showCTPrompt(){
+  ctPhase = 'tap';
+  document.querySelectorAll('.hit-c').forEach(el=>el.classList.remove('hit-c'));
+  const t = ctTargets[ctStep];
+  const chordType = mode==='CT_MAJ' ? 'major' : 'minor';
+
+  if(ctStep === 0){
+    promptLine.innerHTML =
+      `<span style="font-size:12px;color:var(--txt-dim)">${ctRootNote} ${chordType} chord</span><br>` +
+      `Find the <b>Root (1)</b> on the <span class="sn">${STR_LONG[ctRootStr]}</span> string`;
+  } else {
+    promptLine.innerHTML =
+      `Root: <b>${ctRootNote}</b> &nbsp;·&nbsp; Find the <b>${t.label}</b> <span style="font-size:11px;color:var(--txt-dim)">(${t.num})</span><br>` +
+      `<span style="font-size:12px;color:var(--txt-dim)">on the <span class="sn" style="color:var(--blue-root)">${STR_LONG[t.str]}</span> string</span>`;
+  }
+
+  // Step pills
+  stepPills.innerHTML='';
+  ctSteps.forEach((st,i)=>{
+    const p=document.createElement('div'); p.className='pill';
+    p.textContent=st.num;
+    if(i<ctStep) p.classList.add('done');
+    else if(i===ctStep) p.classList.add('current');
+    stepPills.appendChild(p);
+  });
+}
+
+function showCTReveal(){
+  ctPhase='reveal';
+  const t = ctTargets[ctStep];
+
+  // Build chord summary when all done
+  if(ctStep === ctSteps.length - 1){
+    const chordType = mode==='CT_MAJ' ? 'major' : 'minor';
+    const noteNames = ctTargets.map(t=>t.note).join(' — ');
+    const elapsed = ((performance.now()-ctStart)/1000).toFixed(2);
+
+    ctRecord(mode==='CT_MAJ'?'maj':'min', ctWrong);
+
+    stepPills.querySelectorAll('.pill').forEach(p=>{p.classList.remove('current');p.classList.add('done');});
+    promptLine.innerHTML =
+      `<b style="color:var(--green-hit)">✔ ${ctRootNote} ${chordType}</b><br>` +
+      `<span style="font-size:13px;color:var(--txt-dim)">${noteNames}</span>`;
+    timerLine.textContent = `${elapsed}s`;
+    setTimeout(()=>startCTRound(), 2000);
+  } else {
+    // Reveal current note then advance
+    promptLine.innerHTML =
+      `<span style="color:var(--green-hit)">✔</span> <b>${t.num} = ${t.note}</b> &nbsp;` +
+      `<span style="font-size:12px;color:var(--txt-dim)">${t.label}</span>`;
+    setTimeout(()=>{ ctStep++; showCTPrompt(); }, 900);
+  }
+}
+
+function handleCTClick(str, fret){
+  if(ctPhase==='reveal') return;
+  const t = ctTargets[ctStep];
+  if(str!==t.str || fret!==t.fret){ flashCell(str,fret); ctWrong=true; return; }
+  playNote(str,fret);
+  markCell(str, fret, ctStep===0 ? 'root-c' : 'hit-c');
+  showCTReveal();
+}
+
+/* ════════════════════════════════════════════════════════
+   NUMBER SYSTEM TRAINER  (lessons 7-8 + 12-13)
+
+   A note is highlighted on the board (on E or A string,
+   since that's your focus). You're told the root.
+   Tap the correct interval number from the buttons.
+   Trains reading the neck — seeing a note, knowing its role.
+
+   Intervals shown: 1 2 b3 3 4 b5 5 b6 6 b7 7
+   Questions use a random root on E/A + a random interval
+   (weighted toward diatonic: 1 2 3 4 5 6 7 more than chromatic)
+════════════════════════════════════════════════════════ */
+
+// All possible answers to show as buttons — always show 4 choices
+const NUM_ALL = [
+  {semis:0, label:'1'},  {semis:2, label:'2'},
+  {semis:3, label:'b3'}, {semis:4, label:'3'},
+  {semis:5, label:'4'},  {semis:6, label:'b5'},
+  {semis:7, label:'5'},  {semis:8, label:'b6'},
+  {semis:9, label:'6'},  {semis:10,label:'b7'},
+  {semis:11,label:'7'},
+];
+// Diatonic pool (weighted heavier): 1 2 3 4 5 6 7
+const NUM_DIATONIC = [0,2,4,5,7,9,11].map(s=>NUM_ALL.find(n=>n.semis===s));
+
+const numStats = {};
+function numRecord(label, missed){
+  if(!numStats[label]) numStats[label]={attempts:0,misses:0};
+  numStats[label].attempts++;
+  if(missed) numStats[label].misses++;
+}
+function numStruggle(label){
+  const s=numStats[label]; if(!s||s.attempts<2) return 0.5;
+  return s.misses/s.attempts;
+}
+function pickNumInterval(){
+  // 70% chance diatonic, 30% chromatic
+  const pool = Math.random()<0.7 ? NUM_DIATONIC : NUM_ALL;
+  const weights=pool.map(n=>Math.pow(numStruggle(n.label),1.4)*0.8+0.2);
+  const total=weights.reduce((a,b)=>a+b,0);
+  let r=Math.random()*total;
+  for(let i=0;i<pool.length;i++){r-=weights[i];if(r<=0)return pool[i];}
+  return pool[pool.length-1];
+}
+
+let numRootStr='', numRootFret=0, numRootNote='';
+let numTargetStr='', numTargetFret=0, numCorrect=null;
+let numAnswered=false;
+
+function startNUMRound(){
+  numAnswered=false;
+  clearHL(); stepPills.innerHTML=''; btnRow.innerHTML=''; timerLine.textContent='';
+
+  // Root on E or A
+  numRootStr  = Math.random()<0.5 ? 'E_low' : 'A';
+  numRootFret = Math.floor(Math.random()*9);
+  numRootNote = noteAt(numRootStr, numRootFret);
+
+  // Pick a random interval
+  numCorrect = pickNumInterval();
+
+  // Target position — same string for simplicity (recognising note on same string as root)
+  // but could be adjacent. Use same string so focus is on reading, not finding.
+  const tf = numRootFret + numCorrect.semis;
+  if(tf <= 12){
+    numTargetStr  = numRootStr;
+    numTargetFret = tf;
+  } else {
+    // wrap to adjacent string using simple shape
+    const pos = pickSimpleTarget(numRootStr, numRootFret, {semis:numCorrect.semis, display:numCorrect.label, name:numCorrect.label});
+    numTargetStr  = pos.str;
+    numTargetFret = pos.fret;
+  }
+
+  const targetNote = noteAt(numTargetStr, numTargetFret);
+
+  // Highlight root (blue) and target (gold) immediately — player reads, doesn't hunt
+  markCell(numRootStr,  numRootFret,  'root-c');
+  markCell(numTargetStr, numTargetFret, 'correct-c');
+
+  promptLine.innerHTML =
+    `Root: <b>${numRootNote}</b> on <span class="sn">${STR_LONG[numRootStr]}</span><br>` +
+    `The <b style="color:var(--accent)">${targetNote}</b> is which interval?`;
+
+  // Build 4 choice buttons: correct + 3 random wrong
+  const wrong = shuffle(NUM_ALL.filter(n=>n.label!==numCorrect.label)).slice(0,3);
+  const choices = shuffle([numCorrect, ...wrong]);
+  btnRow.innerHTML='';
+  choices.forEach(ch=>{
+    const b=document.createElement('button');
+    b.className='choice-btn';
+    b.textContent=ch.label;
+    addTap(b, ()=>handleNUMChoice(ch,b));
+    btnRow.appendChild(b);
+  });
+}
+
+function handleNUMChoice(choice, btn){
+  if(numAnswered) return;
+  numAnswered=true;
+  const correct = choice.label === numCorrect.label;
+  numRecord(numCorrect.label, !correct);
+
+  // Colour all buttons
+  btnRow.querySelectorAll('.choice-btn').forEach(b=>{
+    if(b.textContent===numCorrect.label) b.classList.add('correct-btn');
+    else if(b===btn && !correct)         b.classList.add('wrong-btn');
+  });
+
+  const targetNote = noteAt(numTargetStr, numTargetFret);
+  const s = numStats[numCorrect.label];
+  let statsHint='';
+  if(s&&s.attempts>=3){
+    const pct=Math.round((1-s.misses/s.attempts)*100);
+    const col=pct>=80?'var(--green-hit)':pct>=50?'var(--accent)':'#e07070';
+    statsHint=` <span style="font-size:10px;color:${col}">${pct}%</span>`;
+  }
+
+  if(correct){
+    promptLine.innerHTML =
+      `<span style="color:var(--green-hit)">✔</span> <b>${numCorrect.label} = ${targetNote}</b>${statsHint}<br>` +
+      `<span style="font-size:12px;color:var(--txt-dim)">${targetNote} is the ${numCorrect.label} of ${numRootNote}</span>`;
+  } else {
+    promptLine.innerHTML =
+      `<span style="color:#e07070">✗</span> That's <b>${choice.label}</b> — correct was <b>${numCorrect.label} = ${targetNote}</b>${statsHint}<br>` +
+      `<span style="font-size:12px;color:var(--txt-dim)">${targetNote} is the ${numCorrect.label} of ${numRootNote}</span>`;
+  }
+
+  setTimeout(()=>startNUMRound(), correct ? 1400 : 2000);
+}
+
+/* ════════════════════════════════
+   CLICK ROUTER
+════════════════════════════════ */
+function handleClick(str,fret){
+  initAudio();
+  if(isIV())       handleIVClick(str,fret);
+  else if(isCT())  handleCTClick(str,fret);
+  else if(isNUM()) { /* number system uses buttons not fretboard taps */ }
+  else             handleNFClick(str,fret);
+}
+
+/* ════════════════════════════════
+   INIT
+════════════════════════════════ */
+window.addEventListener('resize',buildBoard);
+buildBoard();
+</script>
+</body>
+</html>
